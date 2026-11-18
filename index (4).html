@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Portfolio AI Chatbot Demo</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 680px; margin: 70px auto; padding: 0 20px; color: #222; line-height: 1.6; }
+    h1 { margin-bottom: 4px; }
+    .sub { color: #666; margin-top: 0; }
+    pre { background: #f3f3f7; padding: 14px; border-radius: 8px; overflow-x: auto; font-size: 13px; }
+    code { font-family: ui-monospace, Menlo, Consolas, monospace; }
+  </style>
+</head>
+<body>
+  <h1>Portfolio AI Chatbot</h1>
+  <p class="sub">A lightweight, embeddable chat widget backed by a Cloudflare Worker.</p>
+
+  <p>Click the chat button in the bottom-right corner and try asking about skills, services, or projects.</p>
+
+  <h3>Embed it on any site</h3>
+<pre><code>&lt;script src="chat.js"
+        data-worker="https://YOUR-WORKER.workers.dev"&gt;&lt;/script&gt;</code></pre>
+
+  <p>Without a Worker URL the widget still works using built-in FAQ answers. Source code and setup steps are in the repository README.</p>
+
+  <!-- Replace YOUR-WORKER with your Cloudflare Worker URL (leave data-worker="" for FAQ-only mode) -->
+  <script src="chat.js" data-worker="" data-name="Kashaf's Assistant" data-color="#7c3aed"></script>
+</body>
+</html>

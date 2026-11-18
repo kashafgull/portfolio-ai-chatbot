@@ -1,0 +1,156 @@
+/*!
+ * Portfolio Chatbot Widget - self-contained, no dependencies.
+ * Embed: <script src="chat.js" data-worker="https://YOUR-WORKER.workers.dev"></script>
+ * If the AI proxy is down or rate limited, it falls back to built-in answers.
+ */
+(function () {
+  "use strict";
+
+  var script = document.currentScript;
+  var WORKER_URL = (script && script.getAttribute("data-worker")) || "";
+  var BOT_NAME = (script && script.getAttribute("data-name")) || "Kashaf's Assistant";
+  var ACCENT = (script && script.getAttribute("data-color")) || "#7c3aed";
+
+  var GREETING = "Hi! 👋 I'm Kashaf's AI assistant. Ask me about her skills, services, or projects.";
+
+  // Fallback answers (used when the AI is unavailable). Edit these with your real info.
+  var FAQ = [
+    { k: ["hi", "hello", "hey", "salam", "assalam"], a: "Hi there! How can I help you today?" },
+    { k: ["skill", "stack", "tech", "wordpress", "shopify", "react", "node", "elementor", "woocommerce"],
+      a: "Kashaf works with WordPress, WooCommerce, Elementor, Shopify and custom HTML/CSS/JavaScript, with some React and Node.js experience too." },
+    { k: ["project", "portfolio", "sehra", "golden", "castle", "aesthetica", "clinic", "restaurant", "werex", "cybitix", "logistics", "example"],
+      a: "Featured projects: Sehra-e-Khaas (WooCommerce fashion store with a unique story page for every product), Royal Aesthetica Clinic, Werex Trans (logistics), Cybitix (AI and engineering firm) and Golden Castle (restaurant). You can find them in the Portfolio section." },
+    { k: ["service", "offer", "hire", "work", "build", "website", "develop", "design"],
+      a: "Kashaf offers custom WordPress design, WooCommerce stores, plugin development, speed optimization, security and maintenance, and site migration." },
+    { k: ["winksols", "agency"], a: "Winksols is Kashaf's agency, where she handles web and digital projects for clients." },
+    { k: ["price", "cost", "rate", "charge", "quote", "budget"], a: "Pricing depends on the project scope. Please contact Kashaf directly for a quote." },
+    { k: ["contact", "email", "reach", "fiverr", "instagram", "facebook"], a: "You can reach Kashaf through the contact links on this site, or via Fiverr, Instagram or Facebook." },
+    { k: ["education", "degree", "study", "numl", "university", "graduate"], a: "Kashaf has a BS in Software Engineering from NUML (2025)." }
+  ];
+  var FALLBACK_DEFAULT = "I don't have an answer to that right now. Please contact Kashaf directly and she'll be happy to help.";
+
+  function fallbackReply(text) {
+    var t = text.toLowerCase();
+    for (var i = 0; i < FAQ.length; i++) {
+      for (var j = 0; j < FAQ[i].k.length; j++) {
+        var k = FAQ[i].k[j];
+        // short keywords must match a whole word; longer ones match word starts (service -> services)
+        var re = new RegExp(k.length <= 3 ? "\\b" + k + "\\b" : "\\b" + k);
+        if (re.test(t)) return FAQ[i].a;
+      }
+    }
+    return FALLBACK_DEFAULT;
+  }
+
+  // ---- Styles ----
+  var css = "\
+.pcb-btn{position:fixed;right:20px;bottom:20px;width:56px;height:56px;border-radius:50%;border:0;background:" + ACCENT + ";color:#fff;font-size:26px;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.25);z-index:99998}\
+.pcb-panel{position:fixed;right:20px;bottom:90px;width:340px;max-width:calc(100vw - 32px);height:460px;max-height:calc(100vh - 120px);background:#fff;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.25);display:none;flex-direction:column;overflow:hidden;z-index:99999;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}\
+.pcb-panel.open{display:flex}\
+.pcb-head{background:" + ACCENT + ";color:#fff;padding:14px 16px;font-weight:600;display:flex;justify-content:space-between;align-items:center}\
+.pcb-close{background:none;border:0;color:#fff;font-size:20px;cursor:pointer}\
+.pcb-msgs{flex:1;overflow-y:auto;padding:14px;background:#f6f6f9;display:flex;flex-direction:column;gap:8px}\
+.pcb-m{max-width:82%;padding:9px 12px;border-radius:14px;font-size:14px;line-height:1.4;white-space:pre-wrap;word-wrap:break-word}\
+.pcb-bot{background:#fff;color:#222;align-self:flex-start;border-bottom-left-radius:4px}\
+.pcb-user{background:" + ACCENT + ";color:#fff;align-self:flex-end;border-bottom-right-radius:4px}\
+.pcb-form{display:flex;border-top:1px solid #eee;background:#fff}\
+.pcb-input{flex:1;border:0;padding:13px;font-size:14px;outline:none}\
+.pcb-send{border:0;background:none;color:" + ACCENT + ";font-weight:600;padding:0 16px;cursor:pointer}\
+.pcb-send:disabled{opacity:.4;cursor:default}";
+  var style = document.createElement("style");
+  style.textContent = css;
+  document.head.appendChild(style);
+
+  // ---- DOM ----
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text) e.textContent = text;
+    return e;
+  }
+
+  var btn = el("button", "pcb-btn", "💬");
+  btn.setAttribute("aria-label", "Open chat");
+  var panel = el("div", "pcb-panel");
+  var head = el("div", "pcb-head");
+  head.appendChild(el("span", "", BOT_NAME));
+  var close = el("button", "pcb-close", "✕");
+  close.setAttribute("aria-label", "Close chat");
+  head.appendChild(close);
+  var msgs = el("div", "pcb-msgs");
+  var form = el("form", "pcb-form");
+  var input = el("input", "pcb-input");
+  input.type = "text";
+  input.placeholder = "Type your question...";
+  input.maxLength = 500;
+  var send = el("button", "pcb-send", "Send");
+  send.type = "submit";
+  form.appendChild(input);
+  form.appendChild(send);
+  panel.appendChild(head);
+  panel.appendChild(msgs);
+  panel.appendChild(form);
+  document.body.appendChild(btn);
+  document.body.appendChild(panel);
+
+  var history = [];
+  var busy = false;
+
+  function addMsg(text, who) {
+    var m = el("div", "pcb-m " + (who === "user" ? "pcb-user" : "pcb-bot"), text);
+    msgs.appendChild(m);
+    msgs.scrollTop = msgs.scrollHeight;
+    return m;
+  }
+
+  addMsg(GREETING, "bot");
+
+  function toggle(open) {
+    panel.classList.toggle("open", open);
+    if (open) input.focus();
+  }
+  btn.addEventListener("click", function () { toggle(!panel.classList.contains("open")); });
+  close.addEventListener("click", function () { toggle(false); });
+
+  function askAI() {
+    if (!WORKER_URL) return Promise.reject(new Error("no worker"));
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () { ctrl.abort(); }, 15000);
+    return fetch(WORKER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: history }),
+      signal: ctrl.signal
+    }).then(function (r) {
+      clearTimeout(timer);
+      if (!r.ok) throw new Error("http " + r.status);
+      return r.json();
+    }).then(function (d) {
+      if (!d.reply) throw new Error("empty");
+      return d.reply;
+    });
+  }
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var text = input.value.trim();
+    if (!text || busy) return;
+    input.value = "";
+    busy = true;
+    send.disabled = true;
+    addMsg(text, "user");
+    history.push({ role: "user", content: text });
+    var typing = addMsg("...", "bot");
+
+    askAI().catch(function () {
+      return fallbackReply(text);
+    }).then(function (reply) {
+      typing.textContent = reply;
+      history.push({ role: "assistant", content: reply });
+      msgs.scrollTop = msgs.scrollHeight;
+      busy = false;
+      send.disabled = false;
+      input.focus();
+    });
+  });
+})();
